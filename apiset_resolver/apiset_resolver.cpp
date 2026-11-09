@@ -10,7 +10,6 @@
 std::expected<std::string,NTSTATUS> ResolveApiSet(const std::string_view apiset)
 {
     //functions
-
     //https://learn.microsoft.com/en-us/windows/win32/api/apiquery2/nf-apiquery2-isapisetimplemented exists now too
     //https://learn.microsoft.com/en-us/windows/win32/api/apiquery2/nf-apiquery2-getapisetmodulebasename too
     static NTSTATUS(*RtlIsApiSetImplemented)(const char* apiset) = reinterpret_cast<NTSTATUS(*)(const char*)>(GetProcAddress(GetModuleHandleA("ntdll.dll"), "RtlIsApiSetImplemented")); 
@@ -29,7 +28,7 @@ std::expected<std::string,NTSTATUS> ResolveApiSet(const std::string_view apiset)
         //resolves to "A required pointer is null."
         //STATUS_FWP_NULL_POINTER
         SetLastError(RtlNtStatusToDosError(0xC022001C));
-        return std::unexpected(0);
+        return std::unexpected(0xC022001C);
     }
 
     status = RtlIsApiSetImplemented(apiset.data());
