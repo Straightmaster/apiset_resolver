@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="apiset_resolver/apiset_resolver.vcxproj" />
+  <Project Path="apiset_resolver/apiset_resolver.vcxproj" Id="b676daae-8fdf-44a9-8094-0eb0ba30d7aa" />
 </Solution>

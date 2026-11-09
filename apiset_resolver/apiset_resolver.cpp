@@ -1,15 +1,19 @@
+#include <iostream>
+#include <expected>
+#include <print>
 #include <Windows.h>
 #include <winternl.h>
-#include <iostream>
-#include <optional>
-#include <print>
 #pragma comment(lib,"ntdll.lib")
 
 
-std::optional<std::string> ResolveApiSet(const std::string_view apiset)
+
+std::expected<std::string,NTSTATUS> ResolveApiSet(const std::string_view apiset)
 {
     //functions
-    static NTSTATUS(*IsApiSetImplemented)(const char* apiset) = reinterpret_cast<NTSTATUS(*)(const char*)>(GetProcAddress(GetModuleHandleA("api-ms-win-core-apiquery-l2-1-0.dll"), "IsApiSetImplemented")); //or RtlIsApiSetImplemented in ntdll
+
+    //https://learn.microsoft.com/en-us/windows/win32/api/apiquery2/nf-apiquery2-isapisetimplemented exists now too
+    //https://learn.microsoft.com/en-us/windows/win32/api/apiquery2/nf-apiquery2-getapisetmodulebasename too
+    static NTSTATUS(*RtlIsApiSetImplemented)(const char* apiset) = reinterpret_cast<NTSTATUS(*)(const char*)>(GetProcAddress(GetModuleHandleA("ntdll.dll"), "RtlIsApiSetImplemented")); 
     static NTSTATUS(*ApiSetGetImplementationHost)(const char* ApiSet, bool* Success, PCUNICODE_STRING out) = reinterpret_cast<NTSTATUS(*)(const char*, bool*, PCUNICODE_STRING)>(GetProcAddress(GetModuleHandleA("ntdll.dll"), "ApiSetGetImplementationHost"));
 
     //variables
@@ -18,21 +22,21 @@ std::optional<std::string> ResolveApiSet(const std::string_view apiset)
     NTSTATUS status{};
     bool success{};
     std::string result{};
+    
 
-    if (!IsApiSetImplemented || !ApiSetGetImplementationHost)
+    if (!RtlIsApiSetImplemented || !ApiSetGetImplementationHost)
     {
         //resolves to "A required pointer is null."
         //STATUS_FWP_NULL_POINTER
         SetLastError(RtlNtStatusToDosError(0xC022001C));
-        return std::nullopt;
+        return std::unexpected(0);
     }
 
-
-    status = IsApiSetImplemented(apiset.data());
+    status = RtlIsApiSetImplemented(apiset.data());
     if (!NT_SUCCESS(status))
     {
         SetLastError(RtlNtStatusToDosError(status));
-        return std::nullopt;
+        return std::unexpected(status);
     }
 
     //the returned UNICODE_STRING isn't allocated, purely a view of api set map, so no free'ing needed
@@ -40,7 +44,7 @@ std::optional<std::string> ResolveApiSet(const std::string_view apiset)
     if (!NT_SUCCESS(status))
     {
         SetLastError(RtlNtStatusToDosError(status));
-        return std::nullopt;
+        return std::unexpected(status);
     }
 
     //ansi string IS allocated, so we have to free ;)
@@ -48,7 +52,7 @@ std::optional<std::string> ResolveApiSet(const std::string_view apiset)
     if (!NT_SUCCESS(status))
     {
         SetLastError(RtlNtStatusToDosError(status));
-        return std::nullopt;
+        return std::unexpected(status);
     }
 
     //copy it over to an std::string
@@ -62,9 +66,11 @@ std::optional<std::string> ResolveApiSet(const std::string_view apiset)
 
 int main()
 {
-    std::optional<std::string> result = ResolveApiSet("api-ms-win-base-util-l1-1-0");
-    if (!result)
-        std::println("{:s}", std::system_category().message(GetLastError()));
+    std::expected<std::string,NTSTATUS> result = ResolveApiSet("api-ms-win-base-util-l1-1-0");
+    if (!result) {
+        std::println("Dos error: {:s}", std::system_category().message(GetLastError()));
+        std::println("Nt status: {:x}", static_cast<unsigned int>(result.error()));
+    }
     else
         std::println("{:s}", result.value());
 }
